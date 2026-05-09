@@ -141,7 +141,7 @@ def run_scrapy_spider(max_items: int | None = None) -> pd.DataFrame:
     if max_items is not None:
         settings.set("CLOSESPIDER_ITEMCOUNT", max_items, priority="cmdline")
 
-    process = CrawlerProcess(settings)
+    process = CrawlerProcess(settings, install_root_handler=False)
     process.crawl(ArxivSpider, categories=",".join(CATEGORIES), date=SCRAPE_DATE)
     process.start()  # blocks until the crawl finishes
 
@@ -197,7 +197,7 @@ def merge_results(
     extras = [c for c in deduped.columns if c not in _COLUMN_ORDER]
     deduped = deduped[present_ordered + extras].reset_index(drop=True)
 
-    str_cols = deduped.select_dtypes(include="object").columns
+    str_cols = deduped.select_dtypes(include=["object", "string"]).columns
     deduped[str_cols] = deduped[str_cols].apply(lambda s: s.str.strip())
 
     return deduped

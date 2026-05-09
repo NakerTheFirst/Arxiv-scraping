@@ -14,7 +14,7 @@ class DeduplicatePipeline:
     def __init__(self) -> None:
         self._seen: set[str] = set()
 
-    def process_item(self, item, spider):
+    def process_item(self, item, spider=None):
         adapter = ItemAdapter(item)
         arxiv_id = adapter.get("arxiv_id", "")
         if arxiv_id in self._seen:
@@ -33,7 +33,7 @@ class CleanTextPipeline:
         "submission_history", "list_date",
     )
 
-    def process_item(self, item, spider):
+    def process_item(self, item, spider=None):
         adapter = ItemAdapter(item)
         for field in self._TEXT_FIELDS:
             value = adapter.get(field)
