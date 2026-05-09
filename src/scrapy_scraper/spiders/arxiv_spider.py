@@ -11,6 +11,8 @@ shared utils handle text cleaning and regex-based field extraction.
 import sys
 import os
 from datetime import datetime, timezone
+from typing import Iterator
+
 import scrapy
 from scrapy.http import Response
 
