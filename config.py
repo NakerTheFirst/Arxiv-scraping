@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 BASE_URL = "https://arxiv.org"
@@ -15,8 +16,13 @@ MAX_PAPERS_PER_CATEGORY = 200
 CRAWL_DELAY = 15
 
 OUTPUT_DIR = Path("data")
-OUTPUT_CSV = OUTPUT_DIR / "papers.csv"
-OUTPUT_PARQUET = OUTPUT_DIR / "papers.parquet"
+
+_RUN_TS = datetime.now().strftime("%d-%m-%y-%H-%M")
+
+OUTPUT_CSV = OUTPUT_DIR / f"{_RUN_TS}-papers.csv"
+OUTPUT_PARQUET = OUTPUT_DIR / f"{_RUN_TS}-papers.parquet"
+SCRAPY_CSV = OUTPUT_DIR / f"{_RUN_TS}-scrapy_papers.csv"
+SCRAPY_JSONL = OUTPUT_DIR / f"{_RUN_TS}-scrapy_papers.jsonl"
 
 USER_AGENT = "Mozilla/5.0 (compatible; academic-research-scraper/1.0)"
 

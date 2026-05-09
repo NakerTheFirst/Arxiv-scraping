@@ -14,7 +14,8 @@ if _PROJECT_ROOT not in sys.path:
 
 from config import (  # noqa: E402
     CRAWL_DELAY,
-    OUTPUT_DIR,
+    SCRAPY_CSV,
+    SCRAPY_JSONL,
     USER_AGENT,
 )
 
@@ -43,14 +44,13 @@ ITEM_PIPELINES = {
 }
 
 # --- Feed exports ---
-_DATA = str(OUTPUT_DIR)
 FEEDS = {
-    f"{_DATA}/scrapy_papers.csv": {
+    str(SCRAPY_CSV): {
         "format": "csv",
         "overwrite": True,
         "encoding": "utf-8",
     },
-    f"{_DATA}/scrapy_papers.jsonl": {
+    str(SCRAPY_JSONL): {
         "format": "jsonlines",
         "overwrite": True,
         "encoding": "utf-8",

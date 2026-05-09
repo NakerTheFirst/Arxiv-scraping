@@ -25,6 +25,7 @@ from config import (
     OUTPUT_DIR,
     OUTPUT_PARQUET,
     SCRAPE_DATE,
+    SCRAPY_CSV,
 )
 from src.requests_scraper import ListScraper
 from src.selenium_scraper import AbsScraper
@@ -145,7 +146,7 @@ def run_scrapy_spider(max_items: int | None = None) -> pd.DataFrame:
     process.crawl(ArxivSpider, categories=",".join(CATEGORIES), date=SCRAPE_DATE)
     process.start()  # blocks until the crawl finishes
 
-    scrapy_csv = OUTPUT_DIR / "scrapy_papers.csv"
+    scrapy_csv = SCRAPY_CSV
     if not scrapy_csv.exists():
         logger.warning("Scrapy feed not found at %s — skipping", scrapy_csv)
         return pd.DataFrame()
