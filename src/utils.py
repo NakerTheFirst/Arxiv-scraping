@@ -124,6 +124,18 @@ _LISTING_COUNT_RE = re.compile(r'showing first (\d+) of (\d+)')
 _LISTING_DATE_RE = re.compile(r'([A-Z][a-z]+,\s+\d{1,2}\s+[A-Z][a-z]+\s+\d{4})')
 
 
+# ArXiv only accepts these values for the ?show= query parameter
+_VALID_SHOW = (25, 50, 100, 250, 500, 1000, 2000)
+
+
+def snap_show(total: int) -> int:
+    """Return the smallest valid ArXiv ?show= value that covers *total* entries."""
+    for v in _VALID_SHOW:
+        if v >= total:
+            return v
+    return _VALID_SHOW[-1]
+
+
 def parse_listing_header(h3_text: str) -> tuple[str, int, int]:
     """Parse a /list h3 header into (date_str, shown, total).
 

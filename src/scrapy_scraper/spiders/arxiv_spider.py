@@ -26,6 +26,7 @@ from src.utils import (
     extract_categories,
     extract_submission_date,
     parse_listing_header,
+    snap_show,
     build_list_url,
 )
 
@@ -69,11 +70,12 @@ class ArxivSpider(scrapy.Spider):
         list_date, shown, total = parse_listing_header(header_text)
 
         if shown and total and shown < total:
+            show = snap_show(total)
             self.logger.info(
-                "Listing truncated (%d/%d); re-fetching all for %s",
-                shown, total, response.meta["source_category"],
+                "Listing truncated (%d/%d); re-fetching with show=%d for %s",
+                shown, total, show, response.meta["source_category"],
             )
-            full_url = f"{response.url}?skip=0&show={total}"
+            full_url = f"{response.url}?skip=0&show={show}"
             yield response.follow(
                 full_url,
                 callback=self._parse_entries,

@@ -17,6 +17,7 @@ from src.utils import (
     extract_arxiv_id,
     extract_categories,
     parse_listing_header,
+    snap_show,
     rate_limit,
     build_list_url,
     strip_descriptor,
@@ -177,12 +178,13 @@ class ListScraper:
         _, shown, total = parse_listing_header(header_text)
 
         if shown and total and shown < total:
+            show = snap_show(total)
             logger.info(
                 "Listing truncated (%d of %d); re-fetching with show=%d",
-                shown, total, total,
+                shown, total, show,
             )
             rate_limit()
-            soup = self._fetch(f"{url}?skip=0&show={total}") or soup
+            soup = self._fetch(f"{url}?skip=0&show={show}") or soup
 
         papers = self._parse_list_page(soup)
 
