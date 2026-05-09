@@ -16,6 +16,7 @@ from src.utils import (
     clean_text,
     extract_arxiv_id,
     extract_categories,
+    parse_listing_header,
     rate_limit,
     build_list_url,
     strip_descriptor,
@@ -24,11 +25,6 @@ from src.utils import (
 logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = 30  # seconds
-
-# "showing first 50 of 355 entries"
-_LISTING_COUNT_RE = re.compile(r'showing first (\d+) of (\d+)')
-# "Fri, 8 May 2026"
-_LISTING_DATE_RE = re.compile(r'([A-Z][a-z]+,\s+\d{1,2}\s+[A-Z][a-z]+\s+\d{4})')
 
 
 class ListScraper:
@@ -52,19 +48,6 @@ class ListScraper:
             logger.error("Failed to fetch %s: %s", url, exc)
             return None
 
-    @staticmethod
-    def _extract_listing_date(header_text: str) -> str:
-        """Pull the human-readable date out of a /list h3 header."""
-        m = _LISTING_DATE_RE.search(header_text)
-        return m.group(1) if m else clean_text(header_text)
-
-    @staticmethod
-    def _detect_pagination(header_text: str) -> tuple[int, int]:
-        """Return (shown, total) from a header like 'showing first 50 of 355'."""
-        m = _LISTING_COUNT_RE.search(header_text)
-        if m:
-            return int(m.group(1)), int(m.group(2))
-        return 0, 0
 
     @staticmethod
     def _parse_paper_entry(dt: Tag, dd: Tag, list_date: str) -> Optional[dict]:
@@ -151,7 +134,9 @@ class ListScraper:
 
         # The first <h3> carries the listing date and entry counts
         first_h3 = articles_dl.find("h3")
-        list_date = self._extract_listing_date(first_h3.get_text()) if first_h3 else ""
+        list_date, _, _ = (
+            parse_listing_header(first_h3.get_text()) if first_h3 else ("", 0, 0)
+        )
 
         papers: list[dict] = []
         dt_elements = articles_dl.find_all("dt")
@@ -187,11 +172,9 @@ class ListScraper:
             return []
 
         # Check whether the page is truncated
-        first_h3 = soup.find("dl", id="articles")
-        header_text = (
-            first_h3.find("h3").get_text() if first_h3 and first_h3.find("h3") else ""
-        )
-        shown, total = self._detect_pagination(header_text)
+        dl = soup.find("dl", id="articles")
+        header_text = dl.find("h3").get_text() if dl and dl.find("h3") else ""
+        _, shown, total = parse_listing_header(header_text)
 
         if shown and total and shown < total:
             logger.info(

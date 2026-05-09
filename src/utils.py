@@ -119,6 +119,24 @@ def build_pdf_url(arxiv_id: str) -> str:
     return f"https://arxiv.org/pdf/{arxiv_id}"
 
 
+# /list page h3, e.g. "Fri, 8 May 2026 (showing first 50 of 355 entries )"
+_LISTING_COUNT_RE = re.compile(r'showing first (\d+) of (\d+)')
+_LISTING_DATE_RE = re.compile(r'([A-Z][a-z]+,\s+\d{1,2}\s+[A-Z][a-z]+\s+\d{4})')
+
+
+def parse_listing_header(h3_text: str) -> tuple[str, int, int]:
+    """Parse a /list h3 header into (date_str, shown, total).
+
+    ``shown == total`` (or both zero) means the page is not truncated.
+    """
+    date_m = _LISTING_DATE_RE.search(h3_text)
+    date_str = date_m.group(1) if date_m else clean_text(h3_text)
+    count_m = _LISTING_COUNT_RE.search(h3_text)
+    if count_m:
+        return date_str, int(count_m.group(1)), int(count_m.group(2))
+    return date_str, 0, 0
+
+
 def build_list_url(category: str, date: str = "recent") -> str:
     """Construct a /list URL for *category* and *date*.
 
