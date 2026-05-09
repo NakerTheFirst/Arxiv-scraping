@@ -8,9 +8,11 @@ Execution order
 4. Merge & deduplicate       → single master DataFrame
 5. Save                      → data/papers.csv  +  data/papers.parquet
 
-Run:  python main.py
+Run:           python main.py
+Smoke-test:    python main.py --test
 """
 
+import argparse
 import logging
 import sys
 from pathlib import Path
@@ -54,17 +56,56 @@ _COLUMN_ORDER = [
     "scraped_at",
 ]
 
+# Fields that must be non-empty for a record to be considered valid
+_REQUIRED: dict[str, list[str]] = {
+    "requests": ["arxiv_id", "title", "authors", "primary_category", "abs_url"],
+    "selenium": ["arxiv_id", "title", "abstract", "submission_date"],
+    "scrapy":   ["arxiv_id", "title", "abstract", "authors", "primary_category"],
+}
+
+
+# ---------------------------------------------------------------------------
+# Validation helper
+# ---------------------------------------------------------------------------
+
+
+def _validate_phase(phase: str, df: pd.DataFrame) -> bool:
+    """Log per-record PASS/FAIL for *phase* and return True if all pass."""
+    required = _REQUIRED.get(phase, [])
+    if df.empty:
+        logger.error("[%s] FAIL — scraper returned no records", phase.upper())
+        return False
+
+    all_ok = True
+    for _, row in df.iterrows():
+        arxiv_id = row.get("arxiv_id") or "?"
+        missing = [
+            f for f in required
+            if not str(row.get(f, "")).strip()
+        ]
+        if missing:
+            logger.warning(
+                "[%s] FAIL %s — missing: %s", phase.upper(), arxiv_id, missing
+            )
+            all_ok = False
+        else:
+            logger.info("[%s] PASS %s", phase.upper(), arxiv_id)
+
+    return all_ok
+
 
 # ---------------------------------------------------------------------------
 # Phase runners
 # ---------------------------------------------------------------------------
 
 
-def run_requests_scraper() -> pd.DataFrame:
+def run_requests_scraper(max_per_category: int | None = None) -> pd.DataFrame:
     """Phase 1 — collect paper stubs from /list pages via requests + BS4."""
     logger.info("--- Phase 1: requests + BeautifulSoup ---")
     with ListScraper() as scraper:
-        records = scraper.scrape_all_categories(CATEGORIES, date=SCRAPE_DATE)
+        records = scraper.scrape_all_categories(
+            CATEGORIES, date=SCRAPE_DATE, max_papers=max_per_category
+        )
     df = pd.DataFrame(records)
     logger.info("Phase 1 complete: %d stubs", len(df))
     return df
@@ -80,23 +121,25 @@ def run_selenium_scraper(arxiv_ids: list[str]) -> pd.DataFrame:
     return df
 
 
-def run_scrapy_spider() -> pd.DataFrame:
+def run_scrapy_spider(max_items: int | None = None) -> pd.DataFrame:
     """Phase 3 — run the Scrapy spider and load its CSV feed output.
 
     CrawlerProcess is imported here so that Twisted's reactor is only
     initialised after the synchronous scrapers have finished.
+    *max_items* sets CLOSESPIDER_ITEMCOUNT when provided (used in test mode).
     """
     logger.info("--- Phase 3: Scrapy spider ---")
 
     from scrapy.crawler import CrawlerProcess
+    from scrapy.settings import Settings
 
     import src.scrapy_scraper.settings as scrapy_cfg
     from src.scrapy_scraper.spiders.arxiv_spider import ArxivSpider
 
-    # Build a Scrapy Settings object from our settings module
-    from scrapy.settings import Settings
     settings = Settings()
     settings.setmodule(scrapy_cfg, priority="project")
+    if max_items is not None:
+        settings.set("CLOSESPIDER_ITEMCOUNT", max_items, priority="cmdline")
 
     process = CrawlerProcess(settings)
     process.crawl(ArxivSpider, categories=",".join(CATEGORIES), date=SCRAPE_DATE)
@@ -132,7 +175,6 @@ def merge_results(
     """
     logger.info("--- Merging results ---")
 
-    # Stack in priority order; Scrapy records are most complete
     frames = [df for df in (scrapy_df, selenium_df, requests_df) if not df.empty]
     if not frames:
         logger.error("All scrapers returned empty results")
@@ -151,12 +193,10 @@ def merge_results(
         before, len(deduped), before - len(deduped),
     )
 
-    # Reorder columns: known columns first, any extras appended
     present_ordered = [c for c in _COLUMN_ORDER if c in deduped.columns]
     extras = [c for c in deduped.columns if c not in _COLUMN_ORDER]
     deduped = deduped[present_ordered + extras].reset_index(drop=True)
 
-    # Normalise whitespace in all string columns
     str_cols = deduped.select_dtypes(include="object").columns
     deduped[str_cols] = deduped[str_cols].apply(lambda s: s.str.strip())
 
@@ -182,18 +222,37 @@ def save_output(df: pd.DataFrame) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="ArXiv metadata scraper pipeline")
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Smoke-test mode: scrape 3 articles per phase and validate fields",
+    )
+    args = parser.parse_args()
+    test_mode: bool = args.test
+
     setup_logging()
     OUTPUT_DIR.mkdir(exist_ok=True)
 
-    # Phase 1: list scraper — broadest coverage, no abstracts
-    requests_df = run_requests_scraper()
+    if test_mode:
+        logger.info("=== SMOKE-TEST MODE (3 articles per phase) ===")
 
-    # Phase 2: Selenium — abstracts + full metadata for a sample
-    arxiv_ids = requests_df["arxiv_id"].dropna().tolist()[:SELENIUM_SAMPLE]
+    # Phase 1: list scraper
+    requests_df = run_requests_scraper(max_per_category=1 if test_mode else None)
+    if test_mode:
+        requests_ok = _validate_phase("requests", requests_df.head(3))
+
+    # Phase 2: Selenium
+    sample_size = 3 if test_mode else SELENIUM_SAMPLE
+    arxiv_ids = requests_df["arxiv_id"].dropna().tolist()[:sample_size]
     selenium_df = run_selenium_scraper(arxiv_ids) if arxiv_ids else pd.DataFrame()
+    if test_mode:
+        selenium_ok = _validate_phase("selenium", selenium_df)
 
-    # Phase 3: Scrapy — independent async crawl (list → abs)
-    scrapy_df = run_scrapy_spider()
+    # Phase 3: Scrapy
+    scrapy_df = run_scrapy_spider(max_items=3 if test_mode else None)
+    if test_mode:
+        scrapy_ok = _validate_phase("scrapy", scrapy_df.head(3))
 
     # Merge and save
     final_df = merge_results(requests_df, selenium_df, scrapy_df)
@@ -202,7 +261,18 @@ def main() -> None:
         sys.exit(1)
 
     save_output(final_df)
-    logger.info("Done. %d papers saved to %s", len(final_df), OUTPUT_DIR)
+
+    if test_mode:
+        logger.info("=== SMOKE-TEST RESULTS ===")
+        for phase, ok in [("requests", requests_ok), ("selenium", selenium_ok), ("scrapy", scrapy_ok)]:
+            status = "PASS" if ok else "FAIL"
+            logger.info("  %-10s %s", phase, status)
+        if not all([requests_ok, selenium_ok, scrapy_ok]):
+            logger.error("One or more phases failed — check warnings above")
+            sys.exit(1)
+        logger.info("All phases passed.")
+    else:
+        logger.info("Done. %d papers saved to %s", len(final_df), OUTPUT_DIR)
 
 
 if __name__ == "__main__":

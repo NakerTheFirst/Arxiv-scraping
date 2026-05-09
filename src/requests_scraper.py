@@ -198,13 +198,18 @@ class ListScraper:
         self,
         categories: list[str],
         date: str = "recent",
+        max_papers: Optional[int] = None,
     ) -> list[dict]:
-        """Scrape all *categories*, tagging each record with its source category."""
+        """Scrape all *categories*, tagging each record with its source category.
+
+        *max_papers* overrides ``MAX_PAPERS_PER_CATEGORY`` from config when set.
+        """
+        limit = max_papers if max_papers is not None else MAX_PAPERS_PER_CATEGORY
         all_papers: list[dict] = []
         for i, category in enumerate(categories):
             if i > 0:
                 rate_limit()
-            papers = self.scrape_category(category, date, MAX_PAPERS_PER_CATEGORY)
+            papers = self.scrape_category(category, date, limit)
             for p in papers:
                 p["source_category"] = category
             all_papers.extend(papers)
