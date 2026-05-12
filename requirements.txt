@@ -2,7 +2,6 @@ requests>=2.32
 beautifulsoup4>=4.12
 selenium>=4.25
 scrapy>=2.12
-lxml>=5.3
 pandas>=2.2
 pyarrow>=18.0
 jupyter>=1.1
