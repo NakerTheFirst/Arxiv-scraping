@@ -26,6 +26,8 @@ from src.utils import (
     extract_categories,
     extract_submission_date,
     parse_listing_header,
+    parse_paging_total,
+    MAX_SHOW,
     snap_show,
     build_list_url,
 )
@@ -66,21 +68,30 @@ class ArxivSpider(scrapy.Spider):
     # ------------------------------------------------------------------
 
     def parse_list(self, response: Response) -> Iterator[scrapy.Request]:
-        header_text = response.css("dl#articles h3::text").get("")
+        # h3 approach works for recent/daily listings
+        header_text = " ".join(response.xpath("//dl[@id='articles']/h3//text()").getall())
         list_date, shown, total = parse_listing_header(header_text)
 
+        # Fallback for monthly archives: div.paging holds "Total of N entries"
+        if not total:
+            paging_text = " ".join(response.css("div.paging *::text").getall())
+            total = parse_paging_total(paging_text)
+            shown = len(response.css("dl#articles dt"))
+
         if shown and total and shown < total:
-            show = snap_show(total)
+            base_url = response.url.split("?")[0]
             self.logger.info(
-                "Listing truncated (%d/%d); re-fetching with show=%d for %s",
-                shown, total, show, response.meta["source_category"],
+                "Listing truncated (%d/%d); paginating with show=%d for %s",
+                shown, total, MAX_SHOW, response.meta["source_category"],
             )
-            full_url = f"{response.url}?skip=0&show={show}"
-            yield response.follow(
-                full_url,
-                callback=self._parse_entries,
-                meta={**response.meta, "list_date": list_date},
-            )
+            skip = 0
+            while skip < total:
+                yield response.follow(
+                    f"{base_url}?skip={skip}&show={MAX_SHOW}",
+                    callback=self._parse_entries,
+                    meta={**response.meta, "list_date": list_date},
+                )
+                skip += MAX_SHOW
             return
 
         yield from self._parse_entries(response, list_date=list_date)

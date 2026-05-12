@@ -17,7 +17,9 @@ from src.utils import (
     extract_arxiv_id,
     extract_categories,
     parse_listing_header,
+    parse_paging_total,
     snap_show,
+    MAX_SHOW,
     rate_limit,
     build_list_url,
     strip_descriptor,
@@ -172,21 +174,38 @@ class ListScraper:
         if not soup:
             return []
 
-        # Check whether the page is truncated
+        # Check whether the page is truncated — h3 approach (recent/daily listings)
         dl = soup.find("dl", id="articles")
         header_text = dl.find("h3").get_text() if dl and dl.find("h3") else ""
         _, shown, total = parse_listing_header(header_text)
 
-        if shown and total and shown < total:
-            show = snap_show(total)
-            logger.info(
-                "Listing truncated (%d of %d); re-fetching with show=%d",
-                shown, total, show,
-            )
-            rate_limit()
-            soup = self._fetch(f"{url}?skip=0&show={show}") or soup
+        # Fallback for monthly archives: div.paging holds "Total of N entries"
+        if not total:
+            paging = soup.find("div", class_="paging")
+            total = parse_paging_total(paging.get_text() if paging else "")
+            shown = len(dl.find_all("dt")) if dl else 0
 
-        papers = self._parse_list_page(soup)
+        if shown and total and shown < total:
+            logger.info(
+                "Listing truncated (%d of %d); paginating with show=%d",
+                shown, total, MAX_SHOW,
+            )
+            papers: list[dict] = []
+            skip = 0
+            while skip < total:
+                rate_limit()
+                page_soup = self._fetch(f"{url}?skip={skip}&show={MAX_SHOW}")
+                if not page_soup:
+                    break
+                page_papers = self._parse_list_page(page_soup)
+                if not page_papers:
+                    break
+                papers.extend(page_papers)
+                skip += MAX_SHOW
+                if max_papers is not None and len(papers) >= max_papers:
+                    break
+        else:
+            papers = self._parse_list_page(soup)
 
         if max_papers is not None:
             papers = papers[:max_papers]
