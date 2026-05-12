@@ -27,7 +27,6 @@ from src.utils import (
     extract_categories,
     extract_submission_date,
     rate_limit,
-    strip_descriptor,
 )
 
 logger = logging.getLogger(__name__)

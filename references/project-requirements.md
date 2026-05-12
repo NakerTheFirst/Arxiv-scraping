@@ -1,0 +1,33 @@
+HOME-TAKEN PROJECTS:
+- Projects must be completed individually
+- Choose a website to scrape and consult your choice with the instructors before starting, i.e., send us project proposals in PDF format (up to 1 page) via Moodle WNE, named "name\_surnamepdf", - until Apr 7. You must get our acceptance of it.
+- In project proposal include: 1) the website, 2) information on whether it is legal to scrap it, and 3) what elements you want to scrap.
+- Acceptance will be indicated by a grade of 100/100 in moodle in the assignment category “Project Proposal” (submit a one-page PDF named “name_surname.pdf”).
+- The selected website must be legal to scrape.
+- Scrape the website in a way that demonstrates your familiarity with:
+    -     the HTML structure of websites,
+    -     Python regular expressions,
+    -     the following Python libraries: requests, BeautifulSoup, Selenium, Scrapy.
+- i.e., all those elements should be included in the final project.
+- The final output should be a dataframe containing the structured data you scraped.
+- Provide a report describing all your actions, preferably in Jupyter Notebook.
+- Submit your project via Moodle WNE as a ZIP file named exactly "name\_surname.zip".
+- The ZIP file must contain:
+    -     your Python code,
+    -     the dataset (if it is small enough to include directly),
+    -     a "README.txt" file containing:
+        -         your name and surname,
+        -         a list of all files and the order in which they should be run,
+        -         a link to Google Drive with your scraped data (if the dataset is too large to include it directly).
+    -     a "requirements.txt" file containing a list of all packages used,
+    -     a "legal_proof.txt" file including a written proof that the webpage is legal to scrape.
+- Evaluation will be based on:
+    -     technical correctness in applying the tools,
+    -     efficiency of the proposed solution,
+    -     preparation of the data for further analysis,
+    -     structure, i.e., readability, and clarity of the report.
+- Additionally, the complexity of your project will be evaluated in comparison to projects completed by other students, i.e., not only correctness and functionality are assessed, but also:
+    -     the scope of work,
+    -     the difficulty of the implemented solutions,
+    -     the overall technical advancement of the project.
+- Therefore, your project should not only meet the functional requirements but also demonstrate an appropriate level of ambition and independent work.

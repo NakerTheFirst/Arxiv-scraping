@@ -2,7 +2,7 @@
 
 Crawl pattern:
   /list/{category}/{date}  →  parse paper stubs + follow /abs links
-  /abs/{arxiv_id}          →  parse full metadata, yield ArxivPaperItem
+  /abs/{arxiv_id}          →  parse full metadata, yield dict
 
 CSS selectors are used for structural navigation (Scrapy's native API);
 shared utils handle text cleaning and regex-based field extraction.
@@ -19,7 +19,6 @@ from scrapy.http import Response
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")))
 
 from config import BASE_URL, CATEGORIES
-from src.scrapy_scraper.items import ArxivPaperItem
 from src.utils import (
     clean_text,
     extract_arxiv_id,
@@ -177,7 +176,7 @@ class ArxivSpider(scrapy.Spider):
     # /abs page: extract full metadata and yield item
     # ------------------------------------------------------------------
 
-    def parse_abs(self, response: Response) -> Iterator[ArxivPaperItem]:
+    def parse_abs(self, response: Response) -> Iterator[dict]:
         stub: dict = response.meta.get("stub", {})
 
         abs_sel = response.css("div#abs")
@@ -230,24 +229,23 @@ class ArxivSpider(scrapy.Spider):
         history_raw = response.css("div.submission-history").xpath(".//text()").getall()
         submission_history = clean_text("".join(history_raw))
 
-        item = ArxivPaperItem(
-            arxiv_id=stub.get("arxiv_id", ""),
-            title=title,
-            authors=authors,
-            abstract=abstract,
-            submission_date=submission_date,
-            primary_category=primary_category or stub.get("primary_category", ""),
-            cross_list_categories=(
+        yield {
+            "arxiv_id": stub.get("arxiv_id", ""),
+            "title": title,
+            "authors": authors,
+            "abstract": abstract,
+            "submission_date": submission_date,
+            "primary_category": primary_category or stub.get("primary_category", ""),
+            "cross_list_categories": (
                 "; ".join(cross_list) or stub.get("cross_list_categories", "")
             ),
-            comments=comments,
-            doi=doi,
-            pdf_url=_abs(pdf_href, stub.get("pdf_url", "")),
-            html_url=_abs(html_href, stub.get("html_url", "")),
-            abs_url=stub.get("abs_url", response.url),
-            submission_history=submission_history,
-            source_category=stub.get("source_category", ""),
-            list_date=stub.get("list_date", ""),
-            scraped_at=datetime.now(timezone.utc).isoformat(),
-        )
-        yield item
+            "comments": comments,
+            "doi": doi,
+            "pdf_url": _abs(pdf_href, stub.get("pdf_url", "")),
+            "html_url": _abs(html_href, stub.get("html_url", "")),
+            "abs_url": stub.get("abs_url", response.url),
+            "submission_history": submission_history,
+            "source_category": stub.get("source_category", ""),
+            "list_date": stub.get("list_date", ""),
+            "scraped_at": datetime.now(timezone.utc).isoformat(),
+        }

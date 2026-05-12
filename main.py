@@ -15,17 +15,19 @@ Smoke-test:    python main.py --test
 import argparse
 import logging
 import sys
-from pathlib import Path
 
 import pandas as pd
 
 from config import (
     CATEGORIES,
+    CRAWL_DELAY,
     OUTPUT_CSV,
     OUTPUT_DIR,
     OUTPUT_PARQUET,
     SCRAPE_DATE,
     SCRAPY_CSV,
+    SCRAPY_JSONL,
+    USER_AGENT,
 )
 from src.requests_scraper import ListScraper
 from src.selenium_scraper import AbsScraper
@@ -134,11 +136,35 @@ def run_scrapy_spider(max_items: int | None = None) -> pd.DataFrame:
     from scrapy.crawler import CrawlerProcess
     from scrapy.settings import Settings
 
-    import src.scrapy_scraper.settings as scrapy_cfg
     from src.scrapy_scraper.spiders.arxiv_spider import ArxivSpider
 
+    _scrapy_settings = {
+        "BOT_NAME": "arxiv_scraper",
+        "SPIDER_MODULES": ["src.scrapy_scraper.spiders"],
+        "NEWSPIDER_MODULE": "src.scrapy_scraper.spiders",
+        "ROBOTSTXT_OBEY": True,
+        "USER_AGENT": USER_AGENT,
+        "DOWNLOAD_DELAY": CRAWL_DELAY,
+        "RANDOMIZE_DOWNLOAD_DELAY": True,
+        "CONCURRENT_REQUESTS": 1,
+        "CONCURRENT_REQUESTS_PER_DOMAIN": 1,
+        "AUTOTHROTTLE_ENABLED": True,
+        "AUTOTHROTTLE_START_DELAY": CRAWL_DELAY,
+        "AUTOTHROTTLE_MAX_DELAY": 60,
+        "AUTOTHROTTLE_TARGET_CONCURRENCY": 1.0,
+        "ITEM_PIPELINES": {"src.scrapy_scraper.pipelines.DeduplicatePipeline": 100},
+        "FEEDS": {
+            str(SCRAPY_CSV): {"format": "csv", "overwrite": True, "encoding": "utf-8"},
+            str(SCRAPY_JSONL): {"format": "jsonlines", "overwrite": True, "encoding": "utf-8"},
+        },
+        "LOG_LEVEL": "INFO",
+        "DEFAULT_REQUEST_HEADERS": {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en",
+        },
+    }
     settings = Settings()
-    settings.setmodule(scrapy_cfg, priority="project")
+    settings.setdict(_scrapy_settings, priority="project")
     if max_items is not None:
         settings.set("CLOSESPIDER_ITEMCOUNT", max_items, priority="cmdline")
 
