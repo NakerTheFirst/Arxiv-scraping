@@ -7,10 +7,10 @@ BASE_URL = "https://arxiv.org"
 CATEGORIES = ["cs.AI", "cs.CV", "cs.LG", "cs.CL"]
 
 # "recent" for the latest listing, or "YYYY-MM" for a specific month
-SCRAPE_DATE = "recent"
+SCRAPE_DATE = "2026-04"
 
 # Maximum papers to collect per category (None = no limit)
-MAX_PAPERS_PER_CATEGORY = 200
+MAX_PAPERS_PER_CATEGORY = None
 
 # Crawl-delay from robots.txt (seconds)
 CRAWL_DELAY = 15
