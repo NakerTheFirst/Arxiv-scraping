@@ -4,5 +4,6 @@ selenium>=4.25
 scrapy>=2.12
 pandas>=2.2
 pyarrow>=18.0
+matplotlib>=3.9
 jupyter>=1.1
 ipykernel>=6.29
