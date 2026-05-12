@@ -28,7 +28,6 @@ from src.utils import (
     parse_listing_header,
     parse_paging_total,
     MAX_SHOW,
-    snap_show,
     build_list_url,
 )
 
@@ -103,6 +102,8 @@ class ArxivSpider(scrapy.Spider):
         if not list_date:
             header_text = response.css("dl#articles h3::text").get("")
             list_date, _, _ = parse_listing_header(header_text)
+        if not list_date:
+            list_date = self.date
 
         source_category = response.meta.get("source_category", "")
 
@@ -184,44 +185,38 @@ class ArxivSpider(scrapy.Spider):
             self.logger.warning("No #abs element on %s", response.url)
             return
 
-        # --- Title (XPath excludes descriptor span text) ---
         title_parts = abs_sel.xpath(
             'h1[contains(@class,"title")]'
             '//text()[not(parent::span[@class="descriptor"])]'
         ).getall()
         title = clean_text("".join(title_parts)) or stub.get("title", "")
 
-        # --- Authors ---
         author_names = abs_sel.css("div.authors a::text").getall()
         authors = (
             "; ".join(clean_text(a) for a in author_names)
             or stub.get("authors", "")
         )
 
-        # --- Abstract (XPath excludes descriptor span) ---
         abstract_parts = abs_sel.xpath(
             'blockquote[contains(@class,"abstract")]'
             '//text()[not(parent::span[@class="descriptor"])]'
         ).getall()
         abstract = clean_text("".join(abstract_parts))
 
-        # --- Submission date from dateline ---
-        dateline = clean_text(abs_sel.css("div.dateline::text").get(""))
+        dateline = clean_text(
+            "".join(abs_sel.css("div.dateline").xpath(".//text()").getall())
+        )
         submission_date = extract_submission_date(dateline) or ""
 
-        # --- Subjects (metatable) ---
         subjects_text = "".join(abs_sel.css("td.subjects *::text").getall())
         primary_category, cross_list = extract_categories(subjects_text)
 
-        # --- Comments ---
         comments = clean_text(
             "".join(abs_sel.css("td.comments::text").getall())
         ) or stub.get("comments", "")
 
-        # --- DOI ---
         doi = clean_text(response.css("a#arxiv-doi-link::text").get(""))
 
-        # --- Download links ---
         pdf_href = response.css("div.full-text a.download-pdf::attr(href)").get("")
         html_href = response.css(
             "div.full-text a#latexml-download-link::attr(href)"
@@ -232,7 +227,6 @@ class ArxivSpider(scrapy.Spider):
                 return fallback
             return BASE_URL + href if href.startswith("/") else href
 
-        # --- Submission history ---
         history_raw = response.css("div.submission-history").xpath(".//text()").getall()
         submission_history = clean_text("".join(history_raw))
 

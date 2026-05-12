@@ -8,9 +8,10 @@ interact with the rendered DOM and use explicit waits for robustness.
 import logging
 import os
 import sys
+from datetime import datetime, timezone
 from typing import Optional
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.chrome.options import Options
@@ -85,93 +86,6 @@ class AbsScraper:
             return None
 
     # ------------------------------------------------------------------
-    # Parsing helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _parse_title(abs_div: Tag) -> str:
-        title_tag = abs_div.find("h1", class_="title")
-        if not title_tag:
-            return ""
-        for desc in title_tag.find_all("span", class_="descriptor"):
-            desc.decompose()
-        return clean_text(title_tag.get_text())
-
-    @staticmethod
-    def _parse_authors(abs_div: Tag) -> str:
-        authors_div = abs_div.find("div", class_="authors")
-        if not authors_div:
-            return ""
-        links = authors_div.find_all("a")
-        names = (
-            [clean_text(a.get_text()) for a in links]
-            if links
-            else [s.strip() for s in authors_div.get_text().split(",") if s.strip()]
-        )
-        return "; ".join(names)
-
-    @staticmethod
-    def _parse_abstract(abs_div: Tag) -> str:
-        bq = abs_div.find("blockquote", class_="abstract")
-        if not bq:
-            return ""
-        for desc in bq.find_all("span", class_="descriptor"):
-            desc.decompose()
-        return clean_text(bq.get_text())
-
-    @staticmethod
-    def _parse_submission_date(abs_div: Tag) -> str:
-        dateline = abs_div.find("div", class_="dateline")
-        if not dateline:
-            return ""
-        return extract_submission_date(dateline.get_text()) or ""
-
-    @staticmethod
-    def _parse_subjects(abs_div: Tag) -> tuple[str, str]:
-        """Return (primary_category_code, cross_list_codes_semicolon_joined)."""
-        td = abs_div.find("td", class_="subjects")
-        if not td:
-            return "", ""
-        primary, cross_list = extract_categories(td.get_text())
-        return primary, "; ".join(cross_list)
-
-    @staticmethod
-    def _parse_comments(abs_div: Tag) -> str:
-        td = abs_div.find("td", class_="comments")
-        return clean_text(td.get_text()) if td else ""
-
-    @staticmethod
-    def _parse_doi(soup: BeautifulSoup) -> str:
-        doi_link = soup.find("a", id="arxiv-doi-link")
-        return clean_text(doi_link.get_text()) if doi_link else ""
-
-    @staticmethod
-    def _parse_submission_history(soup: BeautifulSoup) -> str:
-        history_div = soup.find("div", class_="submission-history")
-        return clean_text(history_div.get_text()) if history_div else ""
-
-    @staticmethod
-    def _parse_links(soup: BeautifulSoup) -> tuple[str, str]:
-        """Return (pdf_url, html_url) from the full-text sidebar."""
-        full_text_div = soup.find("div", class_="full-text")
-        if not full_text_div:
-            return "", ""
-
-        pdf_url = ""
-        pdf_anchor = full_text_div.find("a", class_="download-pdf")
-        if pdf_anchor:
-            href = pdf_anchor.get("href", "")
-            pdf_url = BASE_URL + href if href.startswith("/") else href
-
-        html_url = ""
-        html_anchor = full_text_div.find("a", id="latexml-download-link")
-        if html_anchor:
-            href = html_anchor.get("href", "")
-            html_url = BASE_URL + href if href.startswith("/") else href
-
-        return pdf_url, html_url
-
-    # ------------------------------------------------------------------
     # Core parse method
     # ------------------------------------------------------------------
 
@@ -182,23 +96,80 @@ class AbsScraper:
             logger.warning("No #abs div found for %s", arxiv_id)
             return {"arxiv_id": arxiv_id}
 
-        primary_category, cross_list_categories = self._parse_subjects(abs_div)
-        pdf_url, html_url = self._parse_links(soup)
+        title_tag = abs_div.find("h1", class_="title")
+        if title_tag:
+            # Descriptor span ("Title:") must be removed before get_text()
+            for desc in title_tag.find_all("span", class_="descriptor"):
+                desc.decompose()
+        title = clean_text(title_tag.get_text()) if title_tag else ""
+
+        authors_div = abs_div.find("div", class_="authors")
+        if authors_div:
+            links = authors_div.find_all("a")
+            names = (
+                [clean_text(a.get_text()) for a in links]
+                if links
+                else [s.strip() for s in authors_div.get_text().split(",") if s.strip()]
+            )
+            authors = "; ".join(names)
+        else:
+            authors = ""
+
+        bq = abs_div.find("blockquote", class_="abstract")
+        if bq:
+            for desc in bq.find_all("span", class_="descriptor"):
+                desc.decompose()
+        abstract = clean_text(bq.get_text()) if bq else ""
+
+        dateline = abs_div.find("div", class_="dateline")
+        submission_date = extract_submission_date(dateline.get_text()) if dateline else ""
+
+        subjects_td = abs_div.find("td", class_="subjects")
+        if subjects_td:
+            primary_category, cross_list = extract_categories(subjects_td.get_text())
+            cross_list_categories = "; ".join(cross_list)
+        else:
+            primary_category, cross_list_categories = "", ""
+
+        comments_td = abs_div.find("td", class_="comments")
+        comments = clean_text(comments_td.get_text()) if comments_td else ""
+
+        doi_link = soup.find("a", id="arxiv-doi-link")
+        doi = clean_text(doi_link.get_text()) if doi_link else ""
+
+        history_div = soup.find("div", class_="submission-history")
+        submission_history = clean_text(history_div.get_text()) if history_div else ""
+
+        pdf_url = ""
+        html_url = ""
+        full_text_div = soup.find("div", class_="full-text")
+        if full_text_div:
+            pdf_anchor = full_text_div.find("a", class_="download-pdf")
+            if pdf_anchor:
+                href = pdf_anchor.get("href", "")
+                pdf_url = BASE_URL + href if href.startswith("/") else href
+            html_anchor = full_text_div.find("a", id="latexml-download-link")
+            if html_anchor:
+                href = html_anchor.get("href", "")
+                html_url = BASE_URL + href if href.startswith("/") else href
 
         return {
             "arxiv_id": arxiv_id,
-            "title": self._parse_title(abs_div),
-            "authors": self._parse_authors(abs_div),
-            "abstract": self._parse_abstract(abs_div),
-            "submission_date": self._parse_submission_date(abs_div),
+            "title": title,
+            "authors": authors,
+            "abstract": abstract,
+            "submission_date": submission_date or "",
             "primary_category": primary_category,
             "cross_list_categories": cross_list_categories,
-            "comments": self._parse_comments(abs_div),
-            "doi": self._parse_doi(soup),
+            "comments": comments,
+            "doi": doi,
             "pdf_url": pdf_url,
             "html_url": html_url,
             "abs_url": f"{BASE_URL}/abs/{arxiv_id}",
-            "submission_history": self._parse_submission_history(soup),
+            "submission_history": submission_history,
+            "source_category": "",
+            "list_date": "",
+            "scraped_at": datetime.now(timezone.utc).isoformat(),
         }
 
     # ------------------------------------------------------------------

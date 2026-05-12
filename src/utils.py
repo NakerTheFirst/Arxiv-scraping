@@ -22,9 +22,6 @@ SUBMISSION_DATE_RE = re.compile(
     r'\[(?:Submitted|submitted)\s+on\s+(\d{1,2}\s+\w+\s+\d{4})\]'
 )
 
-# Version number suffix, e.g. "v3"
-VERSION_RE = re.compile(r'v(\d+)$')
-
 # ArXiv category code, e.g. "cs.AI", "math.CO", "stat.ML"
 CATEGORY_CODE_RE = re.compile(r'\b([a-z]+\.[A-Z]{2,})\b')
 
@@ -86,11 +83,6 @@ def extract_submission_date(dateline: str) -> Optional[str]:
         return clean_text(raw)
 
 
-def parse_authors(authors_text: str) -> list[str]:
-    """Split a comma-delimited author string into a cleaned list of names."""
-    return [clean_text(a) for a in authors_text.split(',') if clean_text(a)]
-
-
 def extract_categories(subjects_text: str) -> tuple[str, list[str]]:
     """Return (primary_code, [cross_list_codes]) from a subjects string.
 
@@ -103,22 +95,6 @@ def extract_categories(subjects_text: str) -> tuple[str, list[str]]:
     return (codes[0], codes[1:])
 
 
-def extract_doi(text: str) -> Optional[str]:
-    """Return the first DOI found in *text*, or None."""
-    match = DOI_RE.search(text)
-    return match.group(0) if match else None
-
-
-def build_abs_url(arxiv_id: str) -> str:
-    """Construct the canonical /abs URL for a given arXiv ID."""
-    return f"https://arxiv.org/abs/{arxiv_id}"
-
-
-def build_pdf_url(arxiv_id: str) -> str:
-    """Construct the canonical /pdf URL for a given arXiv ID."""
-    return f"https://arxiv.org/pdf/{arxiv_id}"
-
-
 # /list page h3, e.g. "Fri, 8 May 2026 (showing first 50 of 355 entries )"
 _LISTING_COUNT_RE = re.compile(r'showing first (\d+) of (\d+)')
 _LISTING_DATE_RE = re.compile(r'([A-Z][a-z]+,\s+\d{1,2}\s+[A-Z][a-z]+\s+\d{4})')
@@ -129,14 +105,6 @@ _PAGING_TOTAL_RE = re.compile(r'Total of (\d+) entries')
 # ArXiv only accepts these values for the ?show= query parameter
 _VALID_SHOW = (25, 50, 100, 250, 500, 1000, 2000)
 MAX_SHOW = _VALID_SHOW[-1]  # 2000
-
-
-def snap_show(total: int) -> int:
-    """Return the smallest valid ArXiv ?show= value that covers *total* entries."""
-    for v in _VALID_SHOW:
-        if v >= total:
-            return v
-    return _VALID_SHOW[-1]
 
 
 def parse_paging_total(text: str) -> int:

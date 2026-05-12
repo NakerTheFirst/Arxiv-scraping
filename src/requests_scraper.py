@@ -1,14 +1,14 @@
 """requests + BeautifulSoup scraper for ArXiv /list index pages."""
 
 import logging
-import re
+import sys
+import os
+from datetime import datetime, timezone
 from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup, Tag
 
-import sys
-import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from config import BASE_URL, USER_AGENT, MAX_PAPERS_PER_CATEGORY
@@ -18,7 +18,6 @@ from src.utils import (
     extract_categories,
     parse_listing_header,
     parse_paging_total,
-    snap_show,
     MAX_SHOW,
     rate_limit,
     build_list_url,
@@ -55,7 +54,6 @@ class ListScraper:
     @staticmethod
     def _parse_paper_entry(dt: Tag, dd: Tag, list_date: str) -> Optional[dict]:
         """Parse one <dt>/<dd> pair into a paper-stub dict."""
-        # --- ArXiv ID (from the "Abstract" anchor or its id= attribute) ---
         abs_anchor = dt.find("a", title="Abstract")
         if not abs_anchor:
             return None
@@ -63,7 +61,6 @@ class ListScraper:
         if not arxiv_id:
             return None
 
-        # --- Download links ---
         pdf_anchor = dt.find("a", title="Download PDF")
         html_anchor = dt.find("a", title="View HTML")
 
@@ -78,16 +75,14 @@ class ListScraper:
         if not meta:
             return None
 
-        # --- Title (strip "Title:" descriptor span) ---
         title_div = meta.find("div", class_="list-title")
         title = ""
         if title_div:
-            # Remove descriptor span to avoid text contamination
+            # Descriptor span ("Title:") must be removed before get_text()
             for desc in title_div.find_all("span", class_="descriptor"):
                 desc.decompose()
             title = clean_text(title_div.get_text())
 
-        # --- Authors (prefer anchor text; fall back to raw text) ---
         authors_div = meta.find("div", class_="list-authors")
         authors = ""
         if authors_div:
@@ -99,7 +94,6 @@ class ListScraper:
             )
             authors = "; ".join(names)
 
-        # --- Subjects: primary category + cross-listings ---
         subjects_div = meta.find("div", class_="list-subjects")
         primary_category = ""
         cross_list_categories = ""
@@ -109,7 +103,6 @@ class ListScraper:
             primary_category, cross_list = extract_categories(subjects_div.get_text())
             cross_list_categories = "; ".join(cross_list)
 
-        # --- Optional comments field ---
         comments_div = meta.find("div", class_="list-comments")
         comments = ""
         if comments_div:
@@ -210,6 +203,11 @@ class ListScraper:
         if max_papers is not None:
             papers = papers[:max_papers]
 
+        scraped_at = datetime.now(timezone.utc).isoformat()
+        for p in papers:
+            p["source_category"] = category
+            p["scraped_at"] = scraped_at
+
         logger.info("Collected %d stubs from %s/%s", len(papers), category, date)
         return papers
 
@@ -228,10 +226,7 @@ class ListScraper:
         for i, category in enumerate(categories):
             if i > 0:
                 rate_limit()
-            papers = self.scrape_category(category, date, limit)
-            for p in papers:
-                p["source_category"] = category
-            all_papers.extend(papers)
+            all_papers.extend(self.scrape_category(category, date, limit))
         return all_papers
 
     def close(self) -> None:

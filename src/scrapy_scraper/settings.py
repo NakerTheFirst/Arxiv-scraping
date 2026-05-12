@@ -40,7 +40,6 @@ AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
 # --- Pipelines ---
 ITEM_PIPELINES = {
     "src.scrapy_scraper.pipelines.DeduplicatePipeline": 100,
-    "src.scrapy_scraper.pipelines.CleanTextPipeline": 200,
 }
 
 # --- Feed exports ---
