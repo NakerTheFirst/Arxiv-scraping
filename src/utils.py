@@ -123,9 +123,12 @@ def build_pdf_url(arxiv_id: str) -> str:
 _LISTING_COUNT_RE = re.compile(r'showing first (\d+) of (\d+)')
 _LISTING_DATE_RE = re.compile(r'([A-Z][a-z]+,\s+\d{1,2}\s+[A-Z][a-z]+\s+\d{4})')
 
+# Monthly archive pages use div.paging: "Total of 5024 entries : 1-50 ..."
+_PAGING_TOTAL_RE = re.compile(r'Total of (\d+) entries')
 
 # ArXiv only accepts these values for the ?show= query parameter
 _VALID_SHOW = (25, 50, 100, 250, 500, 1000, 2000)
+MAX_SHOW = _VALID_SHOW[-1]  # 2000
 
 
 def snap_show(total: int) -> int:
@@ -134,6 +137,12 @@ def snap_show(total: int) -> int:
         if v >= total:
             return v
     return _VALID_SHOW[-1]
+
+
+def parse_paging_total(text: str) -> int:
+    """Extract total entry count from monthly archive div.paging text."""
+    m = _PAGING_TOTAL_RE.search(text)
+    return int(m.group(1)) if m else 0
 
 
 def parse_listing_header(h3_text: str) -> tuple[str, int, int]:
